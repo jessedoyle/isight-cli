@@ -24,7 +24,7 @@
 
 APP_NAME='isight'
 URL='https://raw.githubusercontent.com/jessedoyle/isight-cli/master/isight'
-INSTALL_PATH='/usr/local/bin/$APP_NAME'
+INSTALL_PATH="/usr/local/bin/$APP_NAME"
 
 function download_script() {
   echo "Downloading script from: $URL..."
