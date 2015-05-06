@@ -30,7 +30,8 @@
 # Please visit: http://techslaves.org/isight-disabler/ to see the original
 # AppleScript implementation.
 
-APP_NAME="iSight CLI Disabler"
+APP_NAME='iSight CLI Disabler'
+APP_SHORT='isight'
 VERSION="0.5.0"
 
 OIFS=$IFS
@@ -66,7 +67,7 @@ VERSION
   v$VERSION
 
 USAGE
-  webcam [(on|off)]
+  $APP_SHORT [(on|off)]
 
 ARGUMENTS
   on:
