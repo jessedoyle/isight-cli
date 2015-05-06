@@ -1,0 +1,202 @@
+#!/usr/bin/env bash
+#
+# iSight CLI Disabler
+#
+# MIT LICENSE - Copyright (c) May 2015 Jesse Doyle
+#
+# Permission is hereby  granted, free of charge, to  any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to  deal
+# in  the Software without restriction, including  without limitation the rights
+# to use,  copy,  modify,  merge,  publish, distribute, sublicense,  and/or sell
+# copies  of  the  Software, and  to permit  persons  to  whom  the  Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS  PROVIDED  "AS IS",  WITHOUT WARRANTY  OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT  NOT  LIMITED  TO  THE  WARRANTIES  OF MERCHANTABILITY,
+# FITNESS FOR  A  PARTICULAR PURPOSE  AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS  OR  COPYRIGHT  HOLDERS  BE LIABLE FOR  ANY  CLAIM,  DAMAGES  OR OTHER
+# LIABILITY,  WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE  OR OTHER DEALINGS IN THE
+# SOFTWARE.
+#
+# Acknowledgements:
+#
+# This script is based off of the work completed by http://techslaves.org on
+# their great AppleScript "iSight Disabler".
+#
+# Please visit: http://techslaves.org/isight-disabler/ to see the original
+# AppleScript implementation.
+
+APP_NAME="iSight CLI Disabler"
+VERSION="0.5.0"
+
+OIFS=$IFS
+IFS+="$IFS" # Double newline IFS for readability
+
+DRIVERS=(
+"/System/Library/QuickTime/QuickTimeUSBVDCDigitizer.component/Contents/MacOS/\
+QuickTimeUSBVDCDigitizer"
+
+"/System/Library/PrivateFrameworks/CoreMediaIOServicesPrivate.framework/\
+Versions/A/Resources/VDC.plugin/Contents/MacOS/VDC"
+
+"/System/Library/PrivateFrameworks/CoreMediaIOServices.framework/Versions/A\
+/Resources/VDC.plugin/Contents/MacOS/VDC"
+
+"/System/Library/Frameworks/CoreMediaIO.framework/Versions/A/Resources\
+/VDC.plugin/Contents/MacOS/VDC"
+
+"/Library/CoreMediaIO/Plug-Ins/DAL/AppleCamera.plugin/Contents/MacOS\
+/AppleCamera"
+)
+
+IFS=$OIFS
+
+function help() {
+cat <<EOS
+--------------------------------------------------------------------------------
+
+NAME
+  $APP_NAME - enable and disable the built-in iSight camera
+
+VERSION
+  v$VERSION
+
+USAGE
+  webcam [(on|off)]
+
+ARGUMENTS
+  on:
+    enable iSight camera (requires sudo).
+    alias: enable
+
+  off:
+    disable iSight camera (requires sudo).
+    alias: disable
+
+  help:
+    display this message.
+    alias: -h
+
+  version:
+    print application version.
+    alias: -v
+
+--------------------------------------------------------------------------------
+EOS
+exit 0
+}
+
+function error() {
+  echo "$0: error - $1" 1>&2
+  exit 1
+}
+
+function version() {
+  echo "$APP_NAME: v$VERSION"
+  exit 0
+}
+
+function parse_args() {
+  while [ $# -gt 0 ]
+  do
+      case "$1" in
+      (on)        enable_camera;;
+      (enable)    enable_camera;;
+      (off)       disable_camera;;
+      (disable)   disable_camera;;
+      (help)      help;;
+      (-h)        help;;
+      (version)   version;;
+      (-v)        version;;
+      (status)    break;;
+      ("")        break;;
+      (*)         error "unrecognized option(s): $1";;
+      esac
+      shift
+  done
+  echo $(camera_status)
+  exit 0
+}
+
+# Scan through each element in the DRIVERS array to determine if the path
+# matches a file in the filesyetem. If the driver file exists, append it
+# to the returned string.
+function scan_drivers() {
+  for driver in ${DRIVERS[@]}; do
+    if [ -e "$driver" ]; then
+      [[ -z "$found" ]] && found="$driver" || found="$found $driver"
+    fi
+  done
+
+  if [ -z "$found" ]; then
+    error "unable to find valid drivers"
+  fi
+
+  echo "$found"
+}
+
+# Determine the status of the individual driver files passed in as the first
+# argument. Determine if the driver is active using the octal filesystem
+# permissions.
+function stat_drivers() {
+  found=$1
+  IFS=$' ' read -a drivers <<< "$found"
+
+  for driver in ${drivers[@]}; do
+    octal=$(/usr/bin/stat -f "%p" "$driver")
+    octal=$(echo "$octal" | /usr/bin/awk '{print substr($0, length($0))}')
+    [[ $octal -lt 5 ]] && \
+    v="iSight Status: Disabled" || v="iSight Status: Enabled"
+  done
+
+  echo "$v"
+}
+
+# Change the file permissions for the drivers supplied as the first argument
+# to be more permissive/restrictive based on the second argument ('yes/no').
+function chmod_drivers() {
+  sanity_check
+  drivers=$1
+  [[ "$2" = "yes" ]] && c="/bin/chmod a+r" || c="/bin/chmod a-r"
+  eval "$c $drivers"
+}
+
+# Print the status of the camera to stdout.
+function camera_status() {
+  found=$(scan_drivers)
+  echo $(stat_drivers $found)
+}
+
+# Enable the iSight camera by allowing the current user read access
+# to the driver files.
+function enable_camera() {
+  found=$(scan_drivers)
+  echo $(stat_drivers $found)
+  echo "Enabling iSight..."
+  chmod_drivers "$found" "yes"
+  exit 0
+}
+
+# Disable the iSight camera by restricting the current user read access
+# to the driver files.
+function disable_camera() {
+  found=$(scan_drivers)
+  echo $(stat_drivers "$found")
+  echo "Disabling iSight..."
+  chmod_drivers "$found" "no"
+  exit 0
+}
+
+# Determine if the current user is root - display an error
+# if the user is not root.
+function sanity_check() {
+  if [ "$(whoami)" != "root" ]; then
+    error "must be run as root (sudo) to enable/disable the camera"
+  fi
+}
+
+parse_args "$*"
