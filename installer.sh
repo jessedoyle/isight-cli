@@ -37,7 +37,8 @@ function chmod_script() {
 
 download_script
 chmod_script
-echo "Installation complete! You may now execute the command: $APP_NAME in your terminal."
+echo 'Installation complete!'
+echo "Please execute the command: '$APP_NAME help' in your terminal."
 exit 0
 
 
