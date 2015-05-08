@@ -124,7 +124,7 @@ function parse_args() {
 }
 
 # Scan through each element in the DRIVERS array to determine if the path
-# matches a file in the filesyetem. If the driver file exists, append it
+# matches a file in the filesystem. If the driver file exists, append it
 # to the returned string.
 function scan_drivers() {
   for driver in ${DRIVERS[@]}; do
