@@ -37,6 +37,7 @@ VERSION="0.5.0"
 OIFS=$IFS
 IFS+="$IFS" # Double newline IFS for readability
 
+# Various iSight driver locations in OSX < 10.11
 DRIVERS=(
 "/System/Library/QuickTime/QuickTimeUSBVDCDigitizer.component/Contents/MacOS/\
 QuickTimeUSBVDCDigitizer"
@@ -55,6 +56,54 @@ Versions/A/Resources/VDC.plugin/Contents/MacOS/VDC"
 )
 
 IFS=$OIFS
+
+# With system integrity protection enabled, we have to use system profiles to
+# disable the camera on OSX >= 10.11.
+read -d '' ISD_EL_CAPITAN_CONFIG <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+<key>PayloadIdentifier</key>
+<string>com.apple.mdm.mba.263c7450-4ae1-0133-5b68-68a86d032b5e.alacarte</string>
+<key>PayloadRemovalDisallowed</key>
+<false/>
+<key>PayloadScope</key>
+<string>System</string>
+<key>PayloadType</key>
+<string>Configuration</string>
+<key>PayloadUUID</key>
+<string>263c7450-4ae1-0133-5b68-68a86d032b5e</string>
+<key>PayloadOrganization</key>
+<string>iSight CLI Disabler</string>
+<key>PayloadVersion</key>
+<integer>1</integer>
+<key>PayloadDisplayName</key>
+<string>Disable Camera</string>
+<key>PayloadDescription</key>
+<string>This profile will enable an OS X Restrictions payload where the only option configured to remove permissions is "Allow Camera Use" is unchecked</string>
+<key>PayloadContent</key>
+<array>
+<dict>
+<key>PayloadType</key>
+<string>com.apple.coremediaio.support</string>
+<key>PayloadVersion</key>
+<integer>1</integer>
+<key>PayloadIdentifier</key>
+<string>com.apple.mdm.mba.263c7450-4ae1-0133-5b68-68a86d032b5e.alacarte.macosxrestrictions.26341050-4ae1-0133-5b67-68a86d032b5e.support</string>
+<key>PayloadEnabled</key>
+<true/>
+<key>PayloadUUID</key>
+<string>82807313-a6ee-8f6a-34a3-060c3fc6ec24</string>
+<key>PayloadDisplayName</key>
+<string>Disable Camera</string>
+<key>Device Access Allowed</key>
+<false/>
+</dict>
+</array>
+</dict>
+</plist>
+EOF
 
 function help() {
 cat <<EOS
@@ -168,27 +217,44 @@ function chmod_drivers() {
 
 # Print the status of the camera to stdout.
 function camera_status() {
-  found=$(scan_drivers)
-  echo $(stat_drivers $found)
+  if [ "$(sw_vers -productVersion)" == "10.11" ]; then
+    found=$(profiles -L | grep 'com.apple.mdm.mba.263c7450-4ae1-0133-5b68-68a86d032b5e.alacarte')
+    [[ -z "$found" ]] && v="iSight Status: Enabled" || v="iSight Status: Disabled"
+    echo $v
+  else
+    found=$(scan_drivers)
+    echo $(stat_drivers $found)
+  fi
 }
 
 # Enable the iSight camera by allowing the current user read access
 # to the driver files.
 function enable_camera() {
-  found=$(scan_drivers)
-  echo $(stat_drivers $found)
-  echo "Enabling iSight..."
-  chmod_drivers "$found" "yes"
+  # El Capitan
+  if [ "$(sw_vers -productVersion)" == "10.11" ]; then
+    echo "Enabling iSight..."
+    $(echo "$ISD_EL_CAPITAN_CONFIG" | profiles -R `whoami` -F -)
+  else
+    found=$(scan_drivers)
+    echo $(stat_drivers $found)
+    echo "Enabling iSight..."
+    chmod_drivers "$found" "yes"
+  fi
   exit 0
 }
 
 # Disable the iSight camera by restricting the current user read access
 # to the driver files.
 function disable_camera() {
-  found=$(scan_drivers)
-  echo $(stat_drivers "$found")
-  echo "Disabling iSight..."
-  chmod_drivers "$found" "no"
+  if [ "$(sw_vers -productVersion)" == "10.11" ]; then
+    echo "Disabling iSight..."
+    $(echo "$ISD_EL_CAPITAN_CONFIG" | profiles -I `whoami` -F -)
+  else
+    found=$(scan_drivers)
+    echo $(stat_drivers "$found")
+    echo "Disabling iSight..."
+    chmod_drivers "$found" "no"
+  fi
   exit 0
 }
 
