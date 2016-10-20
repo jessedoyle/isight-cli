@@ -32,33 +32,32 @@
 
 APP_NAME='iSight CLI Disabler'
 APP_SHORT='isight'
-VERSION="0.5.0"
+VERSION="0.5.1"
 
 OIFS=$IFS
-IFS+="$IFS" # Double newline IFS for readability
+IFS+="\n\n" # Double newline IFS for readability
 
-# Various iSight driver locations in OSX < 10.11
+# Various iSight driver locations in OSX < 10.12
 DRIVERS=(
-"/System/Library/QuickTime/QuickTimeUSBVDCDigitizer.component/Contents/MacOS/\
-QuickTimeUSBVDCDigitizer"
+"/System/Library/QuickTime/QuickTimeUSBVDCDigitizer.component/Contents/MacOS/QuickTimeUSBVDCDigitizer"
 
-"/System/Library/PrivateFrameworks/CoreMediaIOServicesPrivate.framework/\
-Versions/A/Resources/VDC.plugin/Contents/MacOS/VDC"
+"/System/Library/PrivateFrameworks/CoreMediaIOServicesPrivate.framework/Versions/A/Resources/VDC.plugin/Contents/MacOS/VDC"
 
-"/System/Library/PrivateFrameworks/CoreMediaIOServices.framework/Versions/A\
-/Resources/VDC.plugin/Contents/MacOS/VDC"
+"/System/Library/PrivateFrameworks/CoreMediaIOServices.framework/Versions/A/Resources/VDC.plugin/Contents/MacOS/VDC"
 
-"/System/Library/Frameworks/CoreMediaIO.framework/Versions/A/Resources\
-/VDC.plugin/Contents/MacOS/VDC"
+"/System/Library/Frameworks/CoreMediaIO.framework/Versions/A/Resources/VDC.plugin/Contents/MacOS/VDC"
 
-"/Library/CoreMediaIO/Plug-Ins/DAL/AppleCamera.plugin/Contents/MacOS\
-/AppleCamera"
+"/Library/CoreMediaIO/Plug-Ins/DAL/AppleCamera.plugin/Contents/MacOS/AppleCamera"
+
+"/Library/CoreMediaIO/Plug-Ins/FCP-DAL/AppleCamera.plugin/Contents/MacOS/AppleCamera"
+
+"/System/Library/PrivateFrameworks/CoreMediaIOServicesPrivate.framework/Versions/A/Resources/AVC.plugin/Contents/MacOS/AVC"
 )
 
 IFS=$OIFS
 
 # With system integrity protection enabled, we have to use system profiles to
-# disable the camera on OSX >= 10.11.
+# disable the camera on OSX >= 10.11 with system integrity protection enabled.
 read -d '' ISD_EL_CAPITAN_CONFIG <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -194,7 +193,8 @@ function scan_drivers() {
 # permissions.
 function stat_drivers() {
   found=$1
-  IFS=$' ' read -a drivers <<< "$found"
+  IFS=$' '
+  read -a drivers <<< "$found"
 
   for driver in ${drivers[@]}; do
     octal=$(/usr/bin/stat -f "%p" "$driver")
@@ -203,6 +203,7 @@ function stat_drivers() {
     v="iSight Status: Disabled" || v="iSight Status: Enabled"
   done
 
+  IFS=$OIFS
   echo "$v"
 }
 
@@ -217,7 +218,10 @@ function chmod_drivers() {
 
 # Print the status of the camera to stdout.
 function camera_status() {
-  if [ "$(sw_vers -productVersion)" == "10.11" ]; then
+  version=$(sw_vers -productVersion | awk -F '.' '{print $1$2}')
+  status=$(system_integrity)
+
+  if [ "$version" -ge "1011" ] && [ "$status" == "enabled" ]; then
     found=$(profiles -L | grep 'com.apple.mdm.mba.263c7450-4ae1-0133-5b68-68a86d032b5e.alacarte')
     [[ -z "$found" ]] && v="iSight Status: Enabled" || v="iSight Status: Disabled"
     echo $v
@@ -230,8 +234,11 @@ function camera_status() {
 # Enable the iSight camera by allowing the current user read access
 # to the driver files.
 function enable_camera() {
-  # El Capitan
-  if [ "$(sw_vers -productVersion)" == "10.11" ]; then
+  version=$(sw_vers -productVersion | awk -F '.' '{print $1$2}')
+  status=$(system_integrity)
+
+  if [ "$version" -ge "1011" ] && [ "$status" == "enabled" ]; then
+    echo "System Integrity Protection is enabled!"
     echo "Enabling iSight..."
     $(echo "$ISD_EL_CAPITAN_CONFIG" | profiles -R `whoami` -F -)
   else
@@ -240,13 +247,18 @@ function enable_camera() {
     echo "Enabling iSight..."
     chmod_drivers "$found" "yes"
   fi
+
   exit 0
 }
 
 # Disable the iSight camera by restricting the current user read access
 # to the driver files.
 function disable_camera() {
-  if [ "$(sw_vers -productVersion)" == "10.11" ]; then
+  version=$(sw_vers -productVersion | awk -F '.' '{print $1$2}')
+  status=$(system_integrity)
+
+  if [ "$version" -ge "1011" ] && [ "$status" == "enabled" ]; then
+    echo "System Integrity Protection is enabled!"
     echo "Disabling iSight..."
     $(echo "$ISD_EL_CAPITAN_CONFIG" | profiles -I `whoami` -F -)
   else
@@ -255,6 +267,7 @@ function disable_camera() {
     echo "Disabling iSight..."
     chmod_drivers "$found" "no"
   fi
+
   exit 0
 }
 
@@ -264,6 +277,14 @@ function sanity_check() {
   if [ "$(whoami)" != "root" ]; then
     error "must be run as root (sudo) to enable/disable the camera"
   fi
+}
+
+# Query for system integrity protection status on MacOS >= 10.11.
+# Returns "enabled" or "disabled".
+function system_integrity() {
+  csrutil status | grep --quiet enabled
+  [[ $? == 0 ]] && s="enabled" || s="disabled"
+  echo "$s"
 }
 
 parse_args "$*"
