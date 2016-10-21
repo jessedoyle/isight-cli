@@ -18,14 +18,18 @@ Alternatively, take the `isight` script from this repository and put it wherever
 
 ## Usage
 
-The `sudo` command is required to enable or disable the camera.
+You must run the `isight` commands below with `sudo` privileges.
+
+###### MacOS >= 10.11 (with System Integrity Protection)
+
+An alternate strategy is used to disable the camera when `isight-cli` detects that the host system has System Integrity Protection enabled. In this case, system profiles are installed to disable the camera.
 
 Disable:
 
 ```bash
 sudo isight off
-
 ```
+
 Enable:
 
 ```bash
