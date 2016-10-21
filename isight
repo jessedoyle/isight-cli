@@ -33,6 +33,7 @@
 APP_NAME='iSight CLI Disabler'
 APP_SHORT='isight'
 VERSION="0.5.1"
+USER=$(whoami)
 
 OIFS=$IFS
 IFS+="\n\n" # Double newline IFS for readability
@@ -80,7 +81,7 @@ read -d '' ISD_EL_CAPITAN_CONFIG <<EOF
 <key>PayloadDisplayName</key>
 <string>Disable Camera</string>
 <key>PayloadDescription</key>
-<string>This profile will enable an OS X Restrictions payload where the only option configured to remove permissions is "Allow Camera Use" is unchecked</string>
+<string>Adds a restriction profile to OS X that disables access to the camera drivers.</string>
 <key>PayloadContent</key>
 <array>
 <dict>
@@ -240,7 +241,7 @@ function enable_camera() {
   if [ "$version" -ge "1011" ] && [ "$status" == "enabled" ]; then
     echo "System Integrity Protection is enabled!"
     echo "Enabling iSight..."
-    $(echo "$ISD_EL_CAPITAN_CONFIG" | profiles -R `whoami` -F -)
+    $(echo "$ISD_EL_CAPITAN_CONFIG" | profiles -R $USER -F -)
   else
     found=$(scan_drivers)
     echo $(stat_drivers $found)
@@ -260,7 +261,7 @@ function disable_camera() {
   if [ "$version" -ge "1011" ] && [ "$status" == "enabled" ]; then
     echo "System Integrity Protection is enabled!"
     echo "Disabling iSight..."
-    $(echo "$ISD_EL_CAPITAN_CONFIG" | profiles -I `whoami` -F -)
+    $(echo "$ISD_EL_CAPITAN_CONFIG" | profiles -I $USER -F -)
   else
     found=$(scan_drivers)
     echo $(stat_drivers "$found")
